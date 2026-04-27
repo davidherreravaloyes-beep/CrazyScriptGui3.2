@@ -1,0 +1,136 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // -------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // -------------------------------------------------------------------------
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'herreravaloyesa@gmail.com' ||
+        request.auth.token.email == 'davidherreravaloyes@gmail.com'
+      );
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // ENTITY VALIDATION HELPERS
+    // -------------------------------------------------------------------------
+
+    function isValidScript(data) {
+      return data.keys().hasAll(['title', 'description', 'author', 'category', 'views', 'likes', 'game', 'thumbnail', 'rawScript']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.category is string && data.category.size() <= 50 &&
+             data.game is string && data.game.size() <= 100 &&
+             data.rawScript is string && data.rawScript.size() <= 50000 &&
+             data.views is int && data.likes is int &&
+             (data.authorId == null || data.authorId is string) &&
+             (data.authorId == null || data.authorId == request.auth.uid || isAdmin());
+    }
+
+    function isValidExecutor(data) {
+      return data.keys().hasAll(['name', 'author', 'description', 'status', 'version']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.author is string && data.author.size() <= 100 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.status in ['Working', 'Outdated'] &&
+             data.version is string && data.version.size() <= 50;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid']) &&
+             data.uid == request.auth.uid &&
+             (data.uid is string && data.uid.size() <= 128);
+    }
+
+    // -------------------------------------------------------------------------
+    // RULES MATCH BLOCKS
+    // -------------------------------------------------------------------------
+
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admins Collection
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Config Collection
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Scripts Collection
+    match /scripts/{scriptId} {
+      allow read: if true;
+      allow create: if (isEmailVerified() || isAdmin()) && isValidScript(incoming()) && isValidId(scriptId);
+      allow update: if (isAdmin() || (isOwner(existing().authorId) && isValidScript(incoming()))) && (
+        // Admin boost action or specific field modifications
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasAny(['views', 'likes', 'updatedAt', 'isTrending', 'isNew', 'isPremium'])) ||
+        // User edit action
+        (incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'category', 'game', 'thumbnail', 'rawScript', 'updatedAt', 'iconName']))
+      );
+      allow delete: if isAdmin() || isOwner(existing().authorId);
+    }
+
+    // Executors Collection
+    match /executors/{executorId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidExecutor(incoming()) && isValidId(executorId);
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'lastLogin']);
+      
+      // Private PII subcollection
+      match /private/email {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Activity Collection
+    match /activity/{activityId} {
+      allow read: if true;
+      allow create: if isSignedIn(); // System/Authenticated users only
+    }
+    
+    // Connection test document
+    match /test/connection {
+      allow get: if true;
+    }
+  }
+}

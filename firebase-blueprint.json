@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "Script": {
+      "title": "Script",
+      "description": "A gaming script or GUI",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "authorId": { "type": "string" },
+        "category": { "type": "string" },
+        "views": { "type": "integer" },
+        "likes": { "type": "integer" },
+        "game": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "rawScript": { "type": "string" },
+        "isTrending": { "type": "boolean" },
+        "isNew": { "type": "boolean" },
+        "isPremium": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "iconName": { "type": "string" }
+      },
+      "required": ["title", "description", "author", "category", "views", "likes", "game", "thumbnail", "rawScript"]
+    },
+    "Executor": {
+      "title": "Executor",
+      "description": "A script executor tool",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "author": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["Working", "Outdated"] },
+        "version": { "type": "string" },
+        "platforms": { "type": "array", "items": { "type": "string" } },
+        "downloads": { "type": "string" },
+        "price": { "type": "string" },
+        "banner": { "type": "string" },
+        "icon": { "type": "string" },
+        "unc": { "type": "string" },
+        "lastWorked": { "type": "string" },
+        "updatedDate": { "type": "string" },
+        "website": { "type": "string" },
+        "discord": { "type": "string" },
+        "gallery": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "author", "description", "status", "version"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Public user profile data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "UserPrivateEmail": {
+      "title": "User Private Email",
+      "description": "Private sensitive user data",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "updatedAt"]
+    },
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "Global settings for the application",
+      "type": "object",
+      "properties": {
+        "brandColor": { "type": "string" },
+        "splashText": { "type": "string" },
+        "splashOwner": { "type": "string" },
+        "aiTitle": { "type": "string" },
+        "aiSubtitle": { "type": "string" },
+        "aiSuggestions": { "type": "string" }
+      }
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "A log of user actions",
+      "type": "object",
+      "properties": {
+        "user": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "time": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user", "action", "target", "time"]
+    }
+  },
+  "firestore": {
+    "/scripts/{scriptId}": {
+      "schema": "Script",
+      "description": "Collection of available scripts"
+    },
+    "/executors/{executorId}": {
+      "schema": "Executor",
+      "description": "Collection of script executors"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles"
+    },
+    "/users/{userId}/private/email": {
+      "schema": "UserPrivateEmail",
+      "description": "Private subcollection for user emails"
+    },
+    "/config/site": {
+      "schema": "SiteConfig",
+      "description": "Singleton document for site config"
+    },
+    "/activity/{activityId}": {
+      "schema": "Activity",
+      "description": "Collection of recent platform activities"
+    },
+    "/admins/{userId}": {
+      "schema": { "type": "object", "properties": { "isAdmin": { "type": "boolean" } } },
+      "description": "Collection of admin user IDs"
+    }
+  }
+}
