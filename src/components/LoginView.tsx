@@ -44,7 +44,8 @@ export function LoginView({ onBack }: { onBack: () => void }) {
       if (error.code === 'auth/popup-blocked') {
         setError("La ventana emergente de inicio de sesión fue bloqueada por tu navegador. Por favor, permite las ventanas emergentes para este sitio e inténtalo de nuevo.");
       } else if (error.code === 'auth/unauthorized-domain') {
-        setError("Este dominio no está autorizado en la configuración del proyecto de Firebase. Debes agregar 'crazy-script-gui3-1.vercel.app' a la lista de dominios autorizados en la Consola de Firebase -> Authentication -> Settings.");
+        const currentDomain = window.location.hostname;
+        setError(`Este dominio (${currentDomain}) no está autorizado en Firebase. Debes agregarlo en la Consola de Firebase -> Authentication -> Settings -> Authorized domains.`);
       } else if (error.code === 'auth/popup-closed-by-user') {
         setError("El inicio de sesión fue interrumpido. Por favor, inténtalo de nuevo.");
       } else if (error.code === 'auth/operation-not-allowed') {
