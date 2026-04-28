@@ -16,20 +16,20 @@ async function startServer() {
   app.post("/api/ai/search", async (req, res) => {
     try {
       const { query } = req.body;
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
       if (!apiKey) {
         return res.status(400).json({ 
-          error: "API Key no detectada", 
-          details: "No se encontró GOOGLE_API_KEY en los Secrets. Por favor, añádela y reinicia el servidor." 
+          error: "API Key no configurada", 
+          details: "El servidor no tiene configurada la clave de Gemini. Si has desplegado la web (ej: en Vercel), asegúrate de añadir GEMINI_API_KEY en las variables de entorno del panel de control de tu hosting." 
         });
       }
 
       const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview", 
-        contents: `Busca scripts RECIENTES (2024-2026) y FUNCIONALES para el juego: "${query}". 
+        model: "gemini-1.5-flash", 
+        contents: `Busca scripts RECIENTES (2024-2025) y FUNCIONALES para el juego: "${query}". 
         Busca PRIORITARIAMENTE en omghubscript.com, rscripts.net/scripts y scriptpastebin.com.`,
         config: {
           systemInstruction: `Eres un buscador especializado de scripts de Roblox. 

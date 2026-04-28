@@ -39,7 +39,7 @@ export function AISearch({ siteConfig }: { siteConfig: any }) {
       
       setError({
         message: serverError?.error || "Error en la búsqueda",
-        details: serverError?.details || "Asegúrate de que la GOOGLE_API_KEY esté configurada en los Secretos del proyecto."
+        details: serverError?.details || "La inteligencia artificial no está configurada correctamente. Si eres el administrador, asegúrate de añadir la GEMINI_API_KEY."
       });
     } finally {
       setIsSearching(false);
@@ -67,7 +67,7 @@ export function AISearch({ siteConfig }: { siteConfig: any }) {
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 border border-brand/20 text-brand text-sm font-bold mb-6"
         >
           <Sparkles className="w-4 h-4" />
-          POWERED BY <span className="cyberpunk-text ml-1 mr-1" data-text="CRAZY IA">CRAZY IA</span> (GEMINI 2.0) v2.1
+          POWERED BY <span className="cyberpunk-text ml-1 mr-1" data-text="CRAZY IA">CRAZY IA</span> (GEMINI 1.5) v2.5
         </motion.div>
         <h1 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tighter uppercase italic flex items-center justify-center gap-3">
           {siteConfig?.aiTitle ? (
@@ -167,25 +167,29 @@ export function AISearch({ siteConfig }: { siteConfig: any }) {
             <h3 className="text-red-400 font-black uppercase text-xl">{error.message}</h3>
             <p className="text-zinc-400 text-sm">{error.details}</p>
             
-            {error.message.includes("API Key") && (
+            {(error.message.includes("API Key") || error.message.includes("Clave")) && (
               <div className="mt-8 p-6 bg-black/40 rounded-xl border border-white/5 text-left space-y-4">
-                <p className="font-bold text-white uppercase text-xs tracking-widest border-b border-white/10 pb-2">Guía paso a paso para corregir:</p>
-                <div className="space-y-3 text-sm">
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded bg-brand text-black flex items-center justify-center font-bold">1</span>
-                    <p className="text-zinc-300">Toca el icono de <b>Ajustes (engranaje ⚙️)</b> o el menú de tu perfil abajo a la izquierda.</p>
+                <p className="font-bold text-white uppercase text-xs tracking-widest border-b border-white/10 pb-2">Guía para corregir el error:</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-zinc-200 font-bold text-xs mb-2 uppercase">Si estás en el Editor de AI Studio:</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded bg-brand text-black flex items-center justify-center font-bold text-[10px]">1</span>
+                        <p className="text-zinc-400">Ve a <b>Ajustes (engranaje ⚙️)</b> &gt; <b>Secrets</b>.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded bg-brand text-black flex items-center justify-center font-bold text-[10px]">2</span>
+                        <p className="text-zinc-400">Añade <code className="bg-zinc-800 px-1 py-0.5 rounded text-brand">GEMINI_API_KEY</code>.</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded bg-brand text-black flex items-center justify-center font-bold">2</span>
-                    <p className="text-zinc-300">Busca la opción que dice <b>"Secrets"</b> o <b>"Environment Variables"</b>.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded bg-brand text-black flex items-center justify-center font-bold">3</span>
-                    <p className="text-zinc-300">Añade una variable con el nombre <code className="bg-zinc-800 px-1 py-0.5 rounded text-brand">GOOGLE_API_KEY</code>.</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded bg-brand text-black flex items-center justify-center font-bold">4</span>
-                    <p className="text-zinc-300">Escribe o pega tu clave y guarda los cambios.</p>
+                  
+                  <div className="pt-2 border-t border-white/5">
+                    <p className="text-zinc-200 font-bold text-xs mb-2 uppercase">Si la web ya está publicada (Vercel/Netlify):</p>
+                    <p className="text-zinc-400 text-xs leading-relaxed">
+                      Debes ir al panel de control de tu hosting (ej. <b>Vercel Dashboard</b>), entrar en los ajustes de tu proyecto, buscar <b>Environment Variables</b> y añadir la <code className="bg-zinc-800 px-1 py-0.5 rounded text-brand">GEMINI_API_KEY</code> manualmente. Luego haz un "Redeploy".
+                    </p>
                   </div>
                 </div>
               </div>
