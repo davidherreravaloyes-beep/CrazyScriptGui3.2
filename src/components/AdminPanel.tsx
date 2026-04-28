@@ -10,9 +10,11 @@ export function AdminPanel({ onEditScript }: { onEditScript?: (script: any) => v
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'scripts' | 'users' | 'branding'>('scripts');
+  const [activeTab, setActiveTab] = useState<'scripts' | 'users' | 'branding' | 'diagnostics'>('scripts');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [diagResult, setDiagResult] = useState<any>(null);
+  const [testingDiag, setTestingDiag] = useState(false);
   const [siteConfig, setSiteConfig] = useState({
     name: 'CrazyGui',
     brand: 'scripts',
@@ -211,6 +213,13 @@ export function AdminPanel({ onEditScript }: { onEditScript?: (script: any) => v
           >
             <Palette size={20} />
             Branding
+          </button>
+          <button 
+            onClick={() => setActiveTab('diagnostics')}
+            className={`w-full flex items-center gap-3 px-6 py-4 rounded-xl font-bold transition-all ${activeTab === 'diagnostics' ? 'bg-brand text-black' : 'text-zinc-400 hover:bg-white/5'}`}
+          >
+            <AlertCircle size={20} />
+            Diagnostics
           </button>
           <button 
             onClick={() => setActiveTab('executors' as any)}
@@ -612,6 +621,66 @@ export function AdminPanel({ onEditScript }: { onEditScript?: (script: any) => v
             </div>
           )}
 
+          {activeTab === 'diagnostics' && (
+            <div className="bg-card border border-border rounded-3xl p-8 md:p-12">
+              <div className="flex items-center gap-3 mb-10">
+                <div className="p-3 bg-brand/10 rounded-2xl text-brand">
+                  <AlertCircle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white">System Diagnostics</h3>
+                  <p className="text-sm text-zinc-500">Check server status and API configurations.</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                 <div className="p-6 bg-black/40 rounded-2xl border border-white/5">
+                   <h4 className="text-sm font-bold text-white uppercase mb-4 tracking-widest">Gemini API Connection</h4>
+                   <p className="text-zinc-400 text-sm mb-6">Prueba si el servidor de Vercel tiene acceso a la clave de IA correctamente.</p>
+                   
+                   {diagResult && (
+                     <div className={cn(
+                       "p-4 rounded-xl mb-6 font-mono text-xs overflow-auto max-h-40",
+                       diagResult.status === 'SUCCESS' ? "bg-green-500/10 border border-green-500/20 text-green-400" : "bg-red-500/10 border border-red-500/20 text-red-400"
+                     )}>
+                       <pre>{JSON.stringify(diagResult, null, 2)}</pre>
+                     </div>
+                   )}
+
+                   <button 
+                    onClick={async () => {
+                      setTestingDiag(true);
+                      try {
+                        const res = await fetch('/api/ai/test');
+                        const data = await res.json();
+                        setDiagResult(data);
+                      } catch (e) {
+                        setDiagResult({ status: 'ERROR', message: 'Failed to reach server diagnostics' });
+                      } finally {
+                        setTestingDiag(false);
+                      }
+                    }}
+                    disabled={testingDiag}
+                    className="px-6 py-3 bg-brand/10 border border-brand/20 text-brand font-bold rounded-xl hover:bg-brand hover:text-black transition-all flex items-center gap-2"
+                   >
+                     {testingDiag ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                     Test Gemini Key Status
+                   </button>
+                 </div>
+
+                 <div className="p-6 bg-black/40 rounded-2xl border border-white/5">
+                   <h4 className="text-sm font-bold text-white uppercase mb-2 tracking-widest">Client Version Info</h4>
+                   <div className="grid grid-cols-2 gap-4 text-xs">
+                     <div className="text-zinc-500">App Version:</div>
+                     <div className="text-white font-bold">2.5 (Deployment Check)</div>
+                     <div className="text-zinc-500">Built At:</div>
+                     <div className="text-white font-bold">{new Date().toLocaleString()}</div>
+                   </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === ('executors' as any) && (
              <div className="bg-card border border-border rounded-3xl overflow-hidden p-6 text-center">
                 <Shield size={48} className="text-zinc-700 mx-auto mb-4" />
@@ -627,10 +696,48 @@ export function AdminPanel({ onEditScript }: { onEditScript?: (script: any) => v
           )}
 
           {activeTab === 'users' && (
-            <div className="bg-card border border-border rounded-3xl p-12 text-center">
-              <Users size={48} className="text-zinc-700 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-white mb-2">User Management</h3>
-              <p className="text-zinc-500">Feature coming soon. Direct Firestore access is recommended for now.</p>
+            <div className="space-y-8">
+              <div className="bg-card border border-border rounded-3xl p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="text-brand" size={24} />
+                    <h3 className="text-xl font-bold text-white">Bot Discovery System</h3>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    Active
+                  </div>
+                </div>
+                <p className="text-zinc-400 text-sm mb-6">
+                  El sistema de bots publica scripts automáticamente cada 40 minutos mientras un administrador está activo en la página.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Bots Operando</div>
+                    <div className="text-xl font-bold text-white">10</div>
+                  </div>
+                  <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Frecuencia</div>
+                    <div className="text-xl font-bold text-white">40 min</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                     const event = new CustomEvent('FORCE_BOT_POST');
+                     window.dispatchEvent(event);
+                     alert("Se ha enviado una señal de posteo manual a los bots. Revisa el Feed de Actividad.");
+                  }}
+                  className="w-full mt-6 py-4 bg-brand/10 border border-brand/20 text-brand font-bold rounded-2xl hover:bg-brand hover:text-black transition-all"
+                >
+                  Forzar Posteo Manual de Bot
+                </button>
+              </div>
+
+              <div className="bg-card border border-border rounded-3xl p-12 text-center">
+                <Users size={48} className="text-zinc-700 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">User Management</h3>
+                <p className="text-zinc-500">Feature coming soon. Direct Firestore access is recommended for now.</p>
+              </div>
             </div>
           )}
         </div>

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { Activity, User, ExternalLink, Loader2, Gavel } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Activity, User, ExternalLink, Loader2, Gavel, Sparkles } from 'lucide-react';
 import { RECENT_ACTIVITY } from '../constants';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export function ActivityFeed() {
-  const [activities, setActivities] = useState(RECENT_ACTIVITY);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState(1248);
 
+  // Online users simulation
   useEffect(() => {
     const interval = setInterval(() => {
-      // 10% probability to jump 1k
       if (Math.random() < 0.1) {
         setOnlineUsers(prev => prev + 1000);
       } else {
@@ -20,40 +22,59 @@ export function ActivityFeed() {
     return () => clearInterval(interval);
   }, []);
 
+  // Real-time Activities from Firestore
   useEffect(() => {
-    const fetchActivities = async () => {
-      try {
-        const response = await fetch('/api/rscripts');
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0) {
-            // Transform data to match UI
-            const newActivities = data.map((item: any) => ({
+    const q = query(collection(db, 'scripts'), orderBy('createdAt', 'desc'), limit(15));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const firestoreActivities = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          user: data.author || 'Anonymous',
+          action: 'published',
+          target: data.title,
+          time: 'NEW',
+          isBot: data.isBot || data.authorId?.startsWith('bot-') || ['ScoutIA', 'DeltaBot', 'Spectrum', 'Nexus'].includes(data.author),
+          isAdmin: data.author === 'D4VIDSKYS' || data.author === 'davidherrera' || data.author === 'D4vidskys'
+        };
+      });
+
+      // Fetch external API for variety
+      const fetchExternal = async () => {
+        try {
+          const response = await fetch('/api/rscripts');
+          if (response.ok) {
+            const externalData = await response.json();
+            const externalActivities = externalData.map((item: any) => ({
               id: item.id,
               user: item.user,
               action: item.action,
               target: item.title,
               time: item.time,
-              isAdmin: item.user === 'System' || item.user === 'D4VIDSKYS' || item.user === 'Server'
+              isAdmin: item.user === 'System' || item.user === 'Server'
             }));
-            setActivities(newActivities);
+            
+            // Merge and sort (simple merge for now)
+            setActivities([...firestoreActivities, ...externalActivities].slice(0, 15));
+          } else {
+            setActivities(firestoreActivities);
           }
+        } catch (e) {
+          setActivities(firestoreActivities);
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error("Failed to fetch fresh activity", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
-    fetchActivities();
-    // Poll every 5 minutes
-    const interval = setInterval(fetchActivities, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+      fetchExternal();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
-    <div className="glass p-6 rounded-3xl border border-border/50 h-full">
+    <div className="glass p-6 rounded-3xl border border-border/50 h-full overflow-hidden">
       <div className="flex items-center justify-between mb-8">
         <h3 className="text-white font-bold flex items-center gap-2">
           <Activity size={18} className="text-brand" />
@@ -68,35 +89,36 @@ export function ActivityFeed() {
             <Loader2 className="text-brand animate-spin" />
           </div>
         ) : (
-          activities.map((item: any, idx) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex gap-4 group cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-full bg-zinc-900 border border-border flex-shrink-0 flex items-center justify-center">
-                <User size={16} className="text-zinc-500 group-hover:text-brand transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">
-                  <span className="text-zinc-500 font-normal flex items-center gap-1">
-                    {item.user}
-                    {item.isAdmin && <Gavel size={10} className="text-brand" fill="currentColor" />}
-                  </span> {item.action}
-                </p>
-                <p className="text-xs text-brand truncate font-mono">
-                  {item.target}
-                </p>
-                <span className="text-[10px] text-zinc-600 uppercase mt-1 block tracking-wider">{item.time}</span>
-              </div>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                 <ExternalLink size={12} className="text-zinc-400" />
-              </div>
-            </motion.div>
-          ))
+          <AnimatePresence mode="popLayout">
+            {activities.map((item: any, idx) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex gap-4 group cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-zinc-900 border border-border flex-shrink-0 flex items-center justify-center relative">
+                  <User size={16} className="text-zinc-500 group-hover:text-brand transition-colors" />
+                  {item.isBot && <Sparkles size={10} className="absolute -top-1 -right-1 text-brand animate-pulse" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">
+                    <span className="text-zinc-500 font-normal flex items-center gap-1">
+                      {item.user}
+                      {item.isAdmin && <Gavel size={10} className="text-brand" fill="currentColor" />}
+                    </span> {item.action}
+                  </p>
+                  <p className="text-xs text-brand truncate font-mono">
+                    {item.target}
+                  </p>
+                  <span className="text-[10px] text-zinc-600 uppercase mt-1 block tracking-wider">{item.time}</span>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
 

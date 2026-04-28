@@ -20,7 +20,7 @@ import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flame, Star, Trophy, Loader2, Gem, Sparkles } from 'lucide-react';
 import { db, auth, onAuthStateChanged, type User, handleFirestoreError, OperationType, syncUserProfile } from './lib/firebase';
-import { collection, query, orderBy, getDoc, getDocs, doc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, orderBy, getDoc, getDocs, doc, setDoc, updateDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
 import { UserProfileModal } from './components/UserProfileModal';
 import { UserSearchModal } from './components/UserSearchModal';
 import { AISearch } from './components/AISearch';
@@ -67,35 +67,36 @@ export default function App() {
             root.style.setProperty('--color-brand-dark', config.brandColor + '99');
           }
         }
-
-        // Fetch Scripts
-        const qScripts = query(collection(db, 'scripts'), orderBy('createdAt', 'desc'));
-        const scriptsSnap = await getDocs(qScripts);
-        const scripts = scriptsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Script[];
-        setFirestoreScripts(scripts);
-        setLoading(false);
-
-        // Fetch Executors
-        const qExecs = query(collection(db, 'executors'), orderBy('updatedAt', 'desc'));
-        const execsSnap = await getDocs(qExecs);
-        const executors = execsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Executor[];
-        setFirestoreExecutors(executors);
-
-      } catch (error: any) {
-        if (error.code === 'resource-exhausted' || error.message?.includes('Quota exceeded')) {
-          console.warn('Firebase Quota Exceeded. Using cached/static data.');
-        } else {
-          console.error('Data fetch error:', error);
-        }
-        setLoading(false);
+      } catch (error) {
+        console.error('Config fetch error:', error);
       }
     };
+
+    // Real-time Scripts
+    const qScripts = query(collection(db, 'scripts'), orderBy('createdAt', 'desc'));
+    const unsubscribeScripts = onSnapshot(qScripts, (snapshot) => {
+      const scripts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Script[];
+      setFirestoreScripts(scripts);
+      setLoading(false);
+    }, (error) => {
+      console.error('Scripts snapshot error:', error);
+      setLoading(false);
+    });
+
+    // Real-time Executors
+    const qExecs = query(collection(db, 'executors'), orderBy('updatedAt', 'desc'));
+    const unsubscribeExecs = onSnapshot(qExecs, (snapshot) => {
+      const executors = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Executor[];
+      setFirestoreExecutors(executors);
+    }, (error) => {
+      console.error('Executors snapshot error:', error);
+    });
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -106,12 +107,19 @@ export default function App() {
       if (currentUser) {
         syncUserProfile(currentUser);
 
-        if (isSecretAdmin || currentUser.email === 'davidherreravaloyes@gmail.com' || currentUser.email === 'herreravaloyesa@gmail.com') {
+        const adminEmails = ['davidherreravaloyes@gmail.com', 'herreravaloyesa@gmail.com', 'davidherrera@crazygui.com'];
+        if (isSecretAdmin || adminEmails.includes(currentUser.email || '')) {
+          console.log("ADMIN ACCESS GRANTED:", currentUser.email);
           setIsAdmin(true);
         } else {
           try {
             const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
-            setIsAdmin(adminDoc.exists());
+            if (adminDoc.exists()) {
+              console.log("ADMIN ACCESS GRANTED (Firestore):", currentUser.uid);
+              setIsAdmin(true);
+            } else {
+              setIsAdmin(false);
+            }
           } catch (error) {
             setIsAdmin(false);
           }
@@ -121,6 +129,7 @@ export default function App() {
         }
       } else {
         setIsAdmin(isSecretAdmin);
+        if (isSecretAdmin) console.log("ADMIN ACCESS GRANTED (Secret Key)");
       }
     });
 
@@ -128,6 +137,8 @@ export default function App() {
 
     return () => {
       unsubscribeAuth();
+      unsubscribeScripts();
+      unsubscribeExecs();
     };
   }, [currentPage]);
 
@@ -210,46 +221,93 @@ export default function App() {
     ];
 
     const interval = setInterval(async () => {
-      // 60% chance every 40 minutes as requested
-      if (Math.random() > 0.60) return;
-      
-      // Post 2 different scripts
-      for (let i = 0; i < 2; i++) {
-        const bot = bots[Math.floor(Math.random() * bots.length)];
-        const scriptData = discoveries[Math.floor(Math.random() * discoveries.length)];
-        const icons = ['TreePine', 'Target', 'Sword', 'Cloud', 'Globe', 'Leaf', 'Zap', 'Skull', 'Shield', 'Search', 'Lock', 'Key', 'Ghost', 'Flame', 'Gem', 'Star'];
-        const randomIcon = icons[Math.floor(Math.random() * icons.length)];
-        
-        const scriptId = `bot-${bot.id}-${Date.now()}-${i}`;
-
-        try {
-          await setDoc(doc(db, 'scripts', scriptId), {
-            title: `[NEW] ${scriptData.title}`,
-            rawScript: scriptData.code,
-            game: scriptData.game,
-            author: bot.name,
-            authorId: user.uid,
-            thumbnail: `https://images.unsplash.com/photo-${1542750000000 + Math.floor(Math.random() * 1000000)}?auto=format&fit=crop&q=80&w=800`,
-            views: Math.floor(Math.random() * 5000) + 1200,
-            likes: Math.floor(Math.random() * 300) + 50,
-            isVerified: true,
-            iconName: randomIcon,
-            category: 'Adventure',
-            description: `👾 script detectado por ${bot.name}. Optimizado para Delta Executor. ¡Funcionando perfectamente!`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        } catch (e) {
-          // Silent catch for quota
-        }
-        
-        // Small delay between the two posts
-        if (i === 0) await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      postBotScript();
     }, 2400000); // Check every 40 minutes (2400000ms)
 
-    return () => clearInterval(interval);
+    // Listener for manual triggers
+    const handleForcePost = () => {
+      console.log("Forcing bot post...");
+      postBotScript();
+    };
+    window.addEventListener('FORCE_BOT_POST', handleForcePost);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('FORCE_BOT_POST', handleForcePost);
+    };
   }, [isAdmin, user]);
+
+  const postBotScript = async () => {
+    if (!isAdmin || !user) return;
+    
+    const bots = [
+      { id: 'bot1', name: 'ScoutIA', source: 'scriptpastebin.com' },
+      { id: 'bot2', name: 'DeltaBot', source: 'rscripts.net' },
+      { id: 'bot3', name: 'Spectrum', source: 'scriptpastebin.com' },
+      { id: 'bot4', name: 'SkyScraper', source: 'rscripts.net' },
+      { id: 'bot5', name: 'Nexus', source: 'scriptpastebin.com' },
+      { id: 'bot6', name: 'Thermomix', source: 'rscripts.net' },
+      { id: 'bot7', name: 'elgoat', source: 'scriptpastebin.com' },
+      { id: 'bot8', name: 'lilbrocazy', source: 'rscripts.net' },
+      { id: 'bot9', name: 'Lexxx', source: 'scriptpastebin.com' },
+      { id: 'bot10', name: 'AzaShadow', source: 'rscripts.net' }
+    ];
+
+    const discoveries = [
+      { title: 'Delta Hub V3', game: 'Universal', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/DeltaHub/Main/main/v3.lua"))()' },
+      { title: 'Blox Fruits Hub', game: 'Blox Fruits', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/ScriptHub/Main/main/blox_delta_v2.lua"))()' },
+      { title: 'Pet Sim 99 Farm', game: 'Pet Simulator 99', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/PS99Bots/Stable/main/ps99_delta.lua"))()' },
+      { title: 'Haze Piece Infinite', game: 'Haze Piece', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/HazeX25/Public/main/haze_universal.lua"))()' },
+      { title: 'King Legacy Farm', game: 'King Legacy', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/KingLegPro/Main/main/king_delta.lua"))()' },
+      { title: 'Brookhaven Admin GUI', game: 'Brookhaven', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/AdminCmds24/Brook/main/gui_v2.lua"))()' },
+      { title: 'MM2 Eclipse Hub', game: 'Murder Mystery 2', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/EclipseDev/Main/main/mm2_delta_final.lua"))()' },
+      { title: 'Blade Ball Parry', game: 'Blade Ball', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/BladeDev/Main/main/parry_v3.lua"))()' },
+      { title: 'Adopt Me Better', game: 'Adopt Me!', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/AdoptDev/Main/main/adopt_fixed.lua"))()' },
+      { title: 'Bee Swarm Sim OP', game: 'Bee Swarm Simulator', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/BeeSim6/Main/main/v6_fixed.lua"))()' },
+      { title: 'Doors Monster Avoid', game: 'Doors', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/DoorsExpl/Main/main/safe_v4.lua"))()' },
+      { title: 'Solara Admin Panel', game: 'Universal', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/SolaraDev/Main/main/panel_v2.lua"))()' },
+      { title: 'Arsenal Aimbot Pro', game: 'Arsenal', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/ArsDev/Main/main/aim.lua"))()' },
+      { title: 'Da Hood Silent Aim', game: 'Da Hood', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/DHoodDev/Main/main/silent.lua"))()' },
+      { title: 'Natural Disaster Survival', game: 'Natural Disaster Survival', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/NDS/Main/main/script.lua"))()' },
+      { title: 'Prison Life Admin', game: 'Prison Life', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/PL/Main/main/admin.lua"))()' },
+      { title: 'Build A Boat AutoFarm', game: 'Build A Boat For Treasure', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/BAB/Main/main/farm.lua"))()' },
+      { title: 'Lumber Tycoon 2 Gui', game: 'Lumber Tycoon 2', code: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/LT2/Main/main/gui.lua"))()' }
+    ];
+
+    // Post 2 different scripts
+    for (let i = 0; i < 2; i++) {
+      const bot = bots[Math.floor(Math.random() * bots.length)];
+      const scriptData = discoveries[Math.floor(Math.random() * discoveries.length)];
+      const icons = ['TreePine', 'Target', 'Sword', 'Cloud', 'Globe', 'Leaf', 'Zap', 'Skull', 'Shield', 'Search', 'Lock', 'Key', 'Ghost', 'Flame', 'Gem', 'Star'];
+      const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+      
+      const scriptId = `bot-${bot.id}-${Date.now()}-${i}`;
+
+      try {
+        await setDoc(doc(db, 'scripts', scriptId), {
+          title: `[NEW] ${scriptData.title}`,
+          rawScript: scriptData.code,
+          game: scriptData.game,
+          author: bot.name,
+          authorId: user.uid,
+          isBot: true,
+          thumbnail: `https://images.unsplash.com/photo-${1542750000000 + Math.floor(Math.random() * 1000000)}?auto=format&fit=crop&q=80&w=800`,
+          views: Math.floor(Math.random() * 5000) + 1200,
+          likes: Math.floor(Math.random() * 300) + 50,
+          isVerified: true,
+          iconName: randomIcon,
+          category: 'Adventure',
+          description: `👾 script detectado por ${bot.name}. Optimizado para Delta Executor. ¡Funcionando perfectamente!`,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        // Silent catch for quota
+      }
+      
+      if (i === 0) await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  };
 
   useEffect(() => {
     const syncExternalScripts = async () => {

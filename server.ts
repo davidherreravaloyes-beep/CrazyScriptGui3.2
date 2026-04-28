@@ -16,14 +16,18 @@ async function startServer() {
   app.post("/api/ai/search", async (req, res) => {
     try {
       const { query } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      let apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
       if (!apiKey) {
+        console.error("DEBUG: No API Key found in process.env");
         return res.status(400).json({ 
-          error: "API Key no configurada", 
-          details: "El servidor no tiene configurada la clave de Gemini. Si has desplegado la web (ej: en Vercel), asegúrate de añadir GEMINI_API_KEY en las variables de entorno del panel de control de tu hosting." 
+          error: "Clave Gemini no configurada", 
+          details: "El servidor de Vercel no tiene la clave GEMINI_API_KEY. Después de añadirla en el panel de Vercel (Environment Variables), DEBES ir a la pestaña 'Deployments' y pulsar en 'Redeploy' para que la web lea la nueva clave." 
         });
       }
+
+      // Sanitize key (remove spaces or quotes that users often copy by mistake)
+      apiKey = apiKey.trim().replace(/^['"]+|['"]+$/g, '');
 
       const ai = new GoogleGenAI({ apiKey });
       
@@ -64,6 +68,16 @@ async function startServer() {
     } catch (error: any) {
       console.error("Gemini Search error:", error);
       
+      const errorMsg = error.message || "";
+      const isKeyInvalid = errorMsg.includes("API key not valid") || errorMsg.includes("INVALID_ARGUMENT");
+      
+      if (isKeyInvalid) {
+        return res.status(401).json({
+          error: "Clave API Inválida",
+          details: "La clave GEMINI_API_KEY que has configurado no es válida para Google. Asegúrate de que no tenga espacios al principio o al final y que la hayas copiado correctamente desde Google AI Studio."
+        });
+      }
+
       // Better error detection for @google/genai SDK
       const statusCode = error.status || (error.error && error.error.code) || (error.cause && error.cause.status);
       
@@ -85,6 +99,32 @@ async function startServer() {
         error: "Error en la búsqueda", 
         details: error.message || "Error desconocido en el servidor" 
       });
+    }
+  });
+
+  // API Route to test Gemini connection
+  app.get("/api/ai/test", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return res.json({ 
+          status: "FAIL", 
+          message: "No API Key detected on server.",
+          envVariablesPresent: Object.keys(process.env).filter(k => k.includes("API_KEY") || k.includes("GEMINI"))
+        });
+      }
+      
+      const ai = new GoogleGenAI({ apiKey: apiKey.trim().replace(/^['"]+|['"]+$/g, '') });
+      
+      res.json({ 
+        status: "SUCCESS", 
+        message: "API Key detected",
+        keyLength: apiKey.length,
+        keyStart: apiKey.trim().substring(0, 4) + "****",
+        model: "gemini-1.5-flash"
+      });
+    } catch (error: any) {
+      res.status(500).json({ status: "ERROR", message: error.message });
     }
   });
 
